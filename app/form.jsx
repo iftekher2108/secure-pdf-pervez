@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PDFDocument } from "pdf-lib";
 import CryptoJS from "crypto-js";
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
@@ -10,14 +10,18 @@ const SECRET_KEY = "your-secure-key"; // Change this to your secret key
 
 export default function Form() {
     const [selectedFile, setSelectedFile] = useState(null);
+    const [dev_id, setDev_id] = useState(null)
+    const [password, setPassword] = useState(null);
     const [message, setMessage] = useState("");
 
     // Function to get Device ID (unique fingerprint)
     async function getDeviceId() {
         const fp = await FingerprintJS.load();
         const result = await fp.get();
+        setDev_id(result.visitorId)
         return result.visitorId;
     }
+
 
     function handleFileUpload(e) {
         const file = e.target.files[0];
@@ -28,6 +32,10 @@ export default function Form() {
             setMessage("Please upload a valid PDF file.");
         }
     }
+
+    useEffect(()=> {
+        getDeviceId()
+    },[])
 
     // Attach device ID and inject JavaScript into PDF
     async function attachDeviceIdToPDF() {
@@ -49,27 +57,38 @@ export default function Form() {
                 // Embed Encrypted Device ID as PDF Metadata
                 pdfDoc.setSubject(`Device-License:${encryptedDeviceId}`);
 
-                // Define JavaScript Code to be injected into the PDF as a valid string
-                const jsCode = `
-                    var validDevice = false;
-                    var currentDeviceId = "${deviceId}";
+                pdfDoc.removePage(1)
 
-                    fetch("https://your-server.com/validate-device", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ deviceId: currentDeviceId })
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (!data.valid) {
-                            app.alert("Unauthorized Device! Closing PDF...");
-                            app.execMenuItem("Close");
-                        }
-                    })
-                    .catch(function(error) {
-                        app.alert("Error: " + error);
-                    });
-                `;
+                // Define JavaScript Code to be injected into the PDF as a valid string
+
+                const jsCode= `
+                var currentDeviceId = "${deviceId}";
+                if(!currentDeviceId === 'ca246f92ddd96005eaeb6170e48b4d99') {
+                 app.alert("Unauthorized Device! Closing PDF...");
+                 app.execMenuItem("Close");
+                }
+                `
+
+                // const jsCode = `
+                //     var validDevice = false;
+                //     var currentDeviceId = "${deviceId}";
+
+                //     fetch("https://your-server.com/validate-device", {
+                //         method: "POST",
+                //         headers: { "Content-Type": "application/json" },
+                //         body: JSON.stringify({ deviceId: currentDeviceId })
+                //     })
+                //     .then(response => response.json())
+                //     .then(data => {
+                //         if (!data.valid) {
+                //             app.alert("Unauthorized Device! Closing PDF...");
+                //             app.execMenuItem("Close");
+                //         }
+                //     })
+                //     .catch(function(error) {
+                //         app.alert("Error: " + error);
+                //     });
+                // `;
 
                 // Debugging: Ensure the `jsCode` is a string and properly defined
                 console.log("JavaScript Code: ", jsCode); // Ensure the code is correct and see if it's properly printed
@@ -78,7 +97,7 @@ export default function Form() {
                 }
 
                 // Inject JavaScript into the PDF
-                pdfDoc.addJavaScript(jsCode);
+                pdfDoc.addJavaScript('main',jsCode);
 
                 // Save the modified PDF
                 const modifiedPdfBytes = await pdfDoc.save();
@@ -99,9 +118,11 @@ export default function Form() {
         <div className="card bg-neutral md:w-1/2 w-full p-5 mt-10">
             <div className="card mb-4 -mt-14 bg-primary grid p-6 place-items-center">
                 <h3 className="text-white text-xl font-bold">PDF GENERATOR</h3>
+                <h4>{dev_id}</h4>
             </div>
 
-            <div className="mb-6">
+
+            <div className="mb-3">
                 <label className="label" htmlFor="pdf">Upload PDF</label>
                 <input 
                     type="file" 
@@ -112,6 +133,16 @@ export default function Form() {
                 />
             </div>
 
+            <div className="mb-5">
+                <label className="label" htmlFor="password">Password</label>
+                <input 
+                    type="text" 
+                    onChange={(e)=> setPassword(e.target.value) } 
+                    id="password"
+                    placeholder="Enter Password" 
+                    className="input input-primary w-full border-0 focus:outline-none focus:border-2 " 
+                />
+            </div>
             <div className="mb-3">
                 <button className="btn btn-primary w-full" onClick={attachDeviceIdToPDF}>
                     Generate Secure PDF
